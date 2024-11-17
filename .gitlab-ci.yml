@@ -1,0 +1,57 @@
+stages:
+  - build
+  - test
+  - deploy
+
+before_script:
+    - cp ${DEFAULT_ENV} .env
+
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "dev"
+      variables:
+        MODE: "DEV"
+        LOG_LEVEL: "INFO"
+    - if: $CI_COMMIT_BRANCH == "prod"
+      variables:
+        MODE: "PROD"
+        LOG_LEVEL: "INFO"
+
+build_job:
+  stage: build
+  tags:
+    - python
+    - $CI_COMMIT_BRANCH
+  script:
+    - echo "Building the application..."
+    - if [ -n "$MODE" ] && [ "$MODE" = "PROD" ] ; then cat ${WP_PRIVATE_KEY_PROD} > credentials/wp/private_key.pem ; else cat ${WP_PRIVATE_KEY_DEV} > credentials/wp/private_key.pem ; fi
+    - if [ -n "$MODE" ] && [ "$MODE" = "PROD" ] ; then cat ${WP_PUBLIC_KEY_PROD} > credentials/wp/public_key.pem ; else cat ${WP_PUBLIC_KEY_DEV} > credentials/wp/public_key.pem ; fi
+    - if [ -n "$MODE" ] && [ "$MODE" = "PROD" ] ; then cat ${WP_SERVER_KEY_PROD} > credentials/wp/server_key ; else cat ${WP_SERVER_KEY_DEV} > credentials/wp/server_key ; fi
+    - cat ${FCM_CREDS} > credentials/fcm/fcm_cred.json
+    - docker compose build
+
+# test_job:
+#   stage: test
+#   tags:
+#     - python
+#   script:
+#     - echo "Running tests..."
+
+
+deploy_job:
+  stage: deploy
+  tags:
+    - python
+    - $CI_COMMIT_BRANCH
+  script:
+    - echo "Deploying the application..."
+    - docker compose down
+    - docker compose up -d
+    - docker image prune -f --filter="dangling=true"
+    - sleep 5
+    - docker ps -a
+    - docker images
+    - docker logs notification-service
+    - docker logs notification-service-consumer
+  needs:
+    - job: build_job

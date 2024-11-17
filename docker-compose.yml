@@ -1,0 +1,93 @@
+services:
+  app:
+    container_name: notification-service
+    ports:
+      - ${NOTIFICATION_SERVICE_PORT}:${NOTIFICATION_SERVICE_PORT}
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    stop_grace_period: 10s
+    environment:
+      NOTIFICATION_SERVICE_PORT: ${NOTIFICATION_SERVICE_PORT}
+      DB_HOST: notification-service-db
+      DB_PORT: 5432
+      DB_USER: ${NOTIFICATION_SERVICE_DB_USER}
+      DB_PASS: ${NOTIFICATION_SERVICE_DB_PWD}
+      DB_NAME: ${NOTIFICATION_SERVICE_DB_NAME}
+      DB_ECHO: 0
+      MAILTO: s.yalovoy@yandex.ru
+      GOOGLE_APPLICATION_CREDENTIALS: /app/credentials/fcm/fcm_cred.json
+      RABBITMQ_HOST: ${RABBIT_HOST_NAME}
+      RABBITMQ_PORT: ${RABBIT_HOST_PORT}
+      RABBITMQ_USER: ${RABBIT_USER_NAME}
+      RABBITMQ_PASS: ${RABBIT_PASSWORD}
+      QUEUE_NAME: ${NOTIFICATION_QUEUE_NAME}
+      ORIGINS: ${COMMON_ORIGINS}
+      MODE: ${MODE}
+      LOG_LEVEL: ${LOG_LEVEL}
+    volumes:
+      - back-end_notification-service-migration-vol:/app/migration/versions
+    networks:
+      - default-net
+      - db-network
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: [ "/app/docker/app.sh" ]
+
+  consumer:
+    container_name: notification-service-consumer
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    stop_grace_period: 10s
+    environment:
+      NOTIFICATION_SERVICE_PORT: ${NOTIFICATION_SERVICE_PORT}
+      DB_HOST: notification-service-db
+      DB_PORT: 5432
+      DB_USER: ${NOTIFICATION_SERVICE_DB_USER}
+      DB_PASS: ${NOTIFICATION_SERVICE_DB_PWD}
+      DB_NAME: ${NOTIFICATION_SERVICE_DB_NAME}
+      DB_ECHO: 0
+      MAILTO: s.yalovoy@yandex.ru
+      GOOGLE_APPLICATION_CREDENTIALS: /app/credentials/fcm/fcm_cred.json
+      RABBITMQ_HOST: ${RABBIT_HOST_NAME}
+      RABBITMQ_PORT: ${RABBIT_HOST_PORT}
+      RABBITMQ_USER: ${RABBIT_USER_NAME}
+      RABBITMQ_PASS: ${RABBIT_PASSWORD}
+      QUEUE_NAME: ${NOTIFICATION_QUEUE_NAME}
+      ORIGINS: ${COMMON_ORIGINS}
+      MODE: ${MODE}
+      LOG_LEVEL: ${LOG_LEVEL}
+    networks:
+      - default-net
+      - db-network
+    build:
+      context: .
+      dockerfile: Dockerfile-consumer
+    command: [ "/app/docker/consumer.sh" ]
+
+  postgres:
+    container_name: notification-service-db
+    image: postgres:${POSTGRES_VERSION}
+    ports:
+      - "5432"
+    restart: always
+    stop_grace_period: 10s
+    volumes:
+      - notification-service-db-vol:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${NOTIFICATION_SERVICE_DB_NAME}
+      POSTGRES_USER: ${NOTIFICATION_SERVICE_DB_USER}
+      POSTGRES_PASSWORD: ${NOTIFICATION_SERVICE_DB_PWD}
+    networks:
+      - db-network
+
+networks:
+  default-net:
+    external: true
+  db-network:
+
+volumes:
+  notification-service-db-vol:
+  back-end_notification-service-migration-vol:
